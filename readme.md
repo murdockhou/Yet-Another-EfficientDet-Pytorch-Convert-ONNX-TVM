@@ -1,3 +1,70 @@
+# Update (20200429)
+
+This repo is based on the [Yet-Another-EfficientDet-Pytorch](https://github.com/zylo117/Yet-Another-EfficientDet-Pytorch) repo. There are many needs to convert this efficientdet network into ONNX, so we make this repo to help poeple to convert model into ONNX or TVM. Note that this repo only provide function how to convert model to ONNX or TVM, not focusing on model training or other things. If you want to train or test this efficientdet model, the best way is refer to original [Yet-Another-EfficientDet-Pytorch](https://github.com/zylo117/Yet-Another-EfficientDet-Pytorch) repo.
+
+We have change some code based on this [original repo](https://github.com/zylo117/Yet-Another-EfficientDet-Pytorch) to help convert successfully.
+
+# convert onnx
+If you want to convert to ONNX, just run
+
+```
+python3 convert/convert_onnx.py
+```
+
+# convert tvm
+We have tested on tvm version on commit **f08d5d78ee000b2c113ac451f8d73817960eafd5 **, other version not tested so can not make sure work well too.
+First, you need to install tvm, refer to its [documentation](https://tvm.apache.org/docs/install/from_source.html). We call your tvm install source dir is **tvm_home**.
+Then, change code on `tvm_home/python/tvm/relay/frontend/pytorch.py` line 1106, change `_pad()` function to:
+```
+def _pad():
+    def _impl(inputs, input_types):
+        data = inputs[0]
+        padding = inputs[1]
+        # pad_width = list(zip(padding, padding))
+        pad_v = padding.type_annotation.shape  # change here and next line
+        pad_width = [[0,0],[0,0],[pad_v[2],pad_v[3]],[pad_v[0],pad_v[1]]]
+        pad_value = inputs[2]
+        return _op.nn.pad(data, pad_width, pad_value)
+    return _impl
+```
+Next, change code on `tvm_home/python/tvm/relay/op/transform.py` line 107, change `transpose(data, axes=None)` function to:
+```
+def transpose(data, axes=None):
+    """Permutes the dimensions of an array.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data to the operator.
+
+    axes : None or List[int]
+        The target axes order, reverse order if not specified.
+
+    Returns
+    -------
+    result : relay.Expr
+        The transposed result.
+    """
+
+    if axes is not None:
+        # axes = list(axes)
+        axes = axes.type_annotation.shape # change here
+    return _make.transpose(data, axes)
+```
+
+Finally, you can run:
+
+`python3 convert/from_pytorch.py`
+
+to convert efficientdet into tvm files.
+
+# Thanks
+The work was a collaborative effort between [lampson](https://github.com/lampsonSong) and I, mostly is [lampson](https://github.com/lampsonSong) contribution. Also thanks for the original [Yet-Another-EfficientDet-Pytorch](https://github.com/zylo117/Yet-Another-EfficientDet-Pytorch) repo provided correct efficientdet results.
+
+# Below is original readme.
+* * *
+
+
 # Yet Another EfficientDet Pytorch
 
 The pytorch re-implement of the official [EfficientDet](https://github.com/google/automl/efficientdet) with SOTA performance in real time, original paper link: https://arxiv.org/abs/1911.09070
@@ -42,6 +109,7 @@ Run this test on 2080Ti, Ubuntu 19.10 x64.
 
 ___
 # Update log
+[2020-04-29] add convert tvm and onnx files
 [2020-04-14] apologizing for the training troubles, there's a bug in loss function. please pull the latest code and give it a try.
 
 [2020-04-14] for those who needs help or can't get a good result after several epochs, check out this [tutorial](tutorial/train_shape.ipynb). You can run it on colab with GPU support.
